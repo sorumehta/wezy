@@ -1,0 +1,15 @@
+*~
+*pyc
+*.DS_Store
+*.egg
+*.eggs
+*.egg-info
+*.log
+*.pyc
+*.sass-cache
+*build/
+*dat
+.env
+venv
+.idea
+
