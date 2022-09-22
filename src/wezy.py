@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def return_error(status_code: int, sock: socket.socket):
     resp = Response(response_code=status_code)
-    resp.write_response()
+    resp.write_response(sock)
     sock.close()
 
 

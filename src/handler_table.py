@@ -2,7 +2,8 @@ from typing import Callable, Dict, Tuple, Optional
 
 
 def test_handler():
-    print("processing request")
+    print("processing request from test handler")
+    return "test successful!"
 
 
 handler_map = {"test": test_handler}
