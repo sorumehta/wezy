@@ -1,16 +1,35 @@
 import socket
 import select
 import logging
+import time
 from typing import List, Dict, Any, Optional
-
+from constants import MAX_BUFFER_TRIES, MAX_REQUEST_SIZE, MAX_REQUEST_AGE
 from buffer import Buffer
-
+from request import Request
+from response import Response
+from handler_table import find_handler
 logger = logging.getLogger(__name__)
+
+
+def return_error(status_code: int, sock: socket.socket):
+    resp = Response(response_code=status_code)
+    resp.write_response()
+    sock.close()
+
+
+def handle_request(sock: socket.socket, request: Request):
+    handler, path_params = find_handler(request.http_method, request.resource)
+    if handler is None:
+        return_error(404, sock)
+        return
+    result = handler(request)
+    response = Response(body=result)
+    response.write_response(sock)
 
 
 def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: List[socket.socket],
                          outputs: List[socket.socket], conns: Dict[socket.socket, Optional[Buffer]]):
-    # if s is our 'server' socket, it means a new client is waiting for us to accept connection
+    # if our 'server' socket is ready, it means a new client is waiting for us to accept connection
     if ready is server:
         connection, client_address = ready.accept()
         print(f"received new connection from {client_address}")
@@ -18,11 +37,39 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
         inputs.append(connection)
         conns[connection] = None
     else:
+        data = ready.recv(2048)
+        if conns[ready] is None:
+            conns[ready] = Buffer(data)
         buf = conns[ready]
-        if buf is None:
-            buf = Buffer()
-        buf.read_buffer() # does this even make sense?
-
+        if buf.process_buffer() == "EOF!":
+            print(f"closing socket")
+            if ready in outputs:
+                outputs.remove(ready)
+            inputs.remove(ready)
+            del conns[ready]
+            ready.close()
+        else:
+            too_big = buf.total_buffered > MAX_REQUEST_SIZE
+            too_old = time.time() - buf.start_time > MAX_REQUEST_AGE
+            too_needy = buf.n_tries > MAX_BUFFER_TRIES
+            if too_big:
+                return_error(413, ready)
+                del conns[ready]
+            elif too_old or too_needy:
+                print(f"request too_old: {too_old} or too_needy: {too_needy}, error 400")
+                return_error(400, ready)
+                del conns[ready]
+            elif buf.request and buf.expecting == 0:
+                del conns[ready]
+                if buf.contents:
+                    print("set buffer request parameters here")
+                try:
+                    handle_request(ready, buf.request)
+                except Exception as e:
+                    logger.exception(e)
+                    return_error(500)
+            else:
+                buf.contents = None
 
 
 def start_server(port: int) -> None:
@@ -35,14 +82,21 @@ def start_server(port: int) -> None:
     connections = {}
     inputs = [server]
     outputs = []
-    while True:
+    while inputs:
         print("event loop in wait mode, press CTRL-C to exit")
         # pass in server socket as input and exception, and empty output to select()
         readable_sock, writeable_sock, err_sock = select.select(inputs, outputs, inputs)
         for s in readable_sock:
-            process_ready_socket(s, server, inputs, outputs)
-
-
+            process_ready_socket(s, server, inputs, outputs, connections)
+        for s in writeable_sock:
+            print("NOTIMPLEMENTED: writeable sock processing")
+        for s in err_sock:
+            print(f"error in sock: {s}")
+            s.close()
+    print("shutting down web server...")
+    for c in connections:
+        c.close()
+    server.close()
 
 
 start_server(10000)
