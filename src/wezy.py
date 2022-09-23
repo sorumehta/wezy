@@ -23,8 +23,13 @@ def handle_request(sock: socket.socket, request: Request, conns: Dict[socket.soc
         return_error(404, sock, conns)
         return
     result = handler(request)
+    if not result:
+        result = {}
+    body = result.get("body") or ""
+    status = result.get("status") or 200
+    headers = result.get("headers") or []
     buf = conns[sock]
-    buf.write_response(body=result)
+    buf.write_response(response_code=status, body=body, response_headers=headers)
 
 
 def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: List[socket.socket],
@@ -57,15 +62,13 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
             too_needy = buf.n_tries > MAX_BUFFER_TRIES
             if too_big:
                 return_error(413, ready, conns)
-                del conns[ready]
                 inputs.remove(ready)
             elif too_old or too_needy:
                 print(f"request too_old: {too_old} or too_needy: {too_needy}, error 400")
                 return_error(400, ready, conns)
-                del conns[ready]
                 inputs.remove(ready)
             elif buf.request:  # and buf.expecting == 0:
-                del conns[ready]
+
                 if buf.contents:
                     print("set buffer request parameters here")
                 try:
@@ -73,6 +76,7 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
                 except Exception as e:
                     logger.exception(e)
                     return_error(500, ready, conns)
+
             else:
                 no_output = True
             # add output channel for response
@@ -85,7 +89,7 @@ def process_outgoing_socket(out_sock: socket.socket, outputs: List[socket.socket
     if buf.response:
         response = buf.response.build_response_str()
         out_sock.send(response.encode())
-        if response.response_code != 200:
+        if buf.response.response_code != 200:
             out_sock.close()
     outputs.remove(out_sock)
 
