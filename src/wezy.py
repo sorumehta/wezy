@@ -72,7 +72,7 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
                     handle_request(ready, buf.request, conns)
                 except Exception as e:
                     logger.exception(e)
-                    return_error(500, ready)
+                    return_error(500, ready, conns)
             else:
                 no_output = True
             # add output channel for response
@@ -85,6 +85,8 @@ def process_outgoing_socket(out_sock: socket.socket, outputs: List[socket.socket
     if buf.response:
         response = buf.response.build_response_str()
         out_sock.send(response.encode())
+        if response.response_code != 200:
+            out_sock.close()
     outputs.remove(out_sock)
 
 
@@ -110,7 +112,12 @@ def start_server(port: int) -> None:
             process_outgoing_socket(s, outputs, connections)
         for s in err_sock:
             print(f"error in sock: {s}")
+            inputs.remove(s)
+            if s in outputs:
+                outputs.remove(s)
             s.close()
+            if s in connections:
+                del connections[s]
     print("shutting down web server...")
     for c in connections:
         c.close()
