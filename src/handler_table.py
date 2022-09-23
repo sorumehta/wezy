@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Tuple, Optional
 
 
-def test_handler():
+def test_handler(request):
     print("processing request from test handler")
     return "test successful!"
 
