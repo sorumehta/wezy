@@ -1,8 +1,7 @@
 import datetime
 from email import utils
-from http.client import responses
 from typing import List, Tuple
-
+from utils import get_status_message
 
 class Response:
     def __init__(self, headers: List[Tuple[str, str]] = None, response_code: int = 200,
@@ -29,7 +28,7 @@ class Response:
             if not found:
                 headers_to_add.append(d_h)
         response_headers = server_headers + self.response_headers + headers_to_add
-        response = f"HTTP/1.1 {self.response_code} {responses[self.response_code]}\r\n"
+        response = f"HTTP/1.1 {self.response_code} {get_status_message(self.response_code)}\r\n"
         for header in response_headers:
             response += f"{header[0]}: {header[1]}\r\n"
         response += "\r\n"

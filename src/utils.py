@@ -1,2 +1,9 @@
-def is_line_terminated(contents: str)->bool:
-    return contents[-4:].startswith("\r\n\r\n")
+from http.client import responses
+
+
+def is_line_terminated(text: str) -> bool:
+    return text.endswith('\r\n\r\n')
+
+
+def get_status_message(status_code: int) -> str:
+    return responses[status_code]

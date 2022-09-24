@@ -7,13 +7,13 @@ from constants import MAX_BUFFER_TRIES, MAX_REQUEST_SIZE, MAX_REQUEST_AGE
 from buffer import Buffer
 from request import Request
 from handler_table import find_handler
+from utils import get_status_message
 logger = logging.getLogger(__name__)
 
 
 def return_error(status_code: int, sock: socket.socket, conns: Dict[socket.socket, Buffer]):
     buf = conns[sock]
-    buf.write_response(response_code=status_code)
-    # sock.close()
+    buf.write_response(response_code=status_code, body=get_status_message(status_code),response_headers=[])
 
 
 def handle_request(sock: socket.socket, request: Request, conns: Dict[socket.socket, Buffer]):
@@ -21,7 +21,8 @@ def handle_request(sock: socket.socket, request: Request, conns: Dict[socket.soc
     if handler is None:
         return_error(404, sock, conns)
         return
-    result = handler(request)
+    else:
+        result = handler(request)
     if not result:
         result = {}
     body = result.get("body") or ""
@@ -66,10 +67,7 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
                 print(f"request too_old: {too_old} or too_needy: {too_needy}, error 400")
                 return_error(400, ready, conns)
                 inputs.remove(ready)
-            elif buf.request:  # and buf.expecting == 0:
-
-                if buf.contents:
-                    print("set buffer request parameters here")
+            elif buf.request:
                 try:
                     handle_request(ready, buf.request, conns)
                 except Exception as e:
