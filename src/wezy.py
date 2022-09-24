@@ -6,7 +6,6 @@ from typing import List, Dict, Optional
 from constants import MAX_BUFFER_TRIES, MAX_REQUEST_SIZE, MAX_REQUEST_AGE
 from buffer import Buffer
 from request import Request
-from response import Response
 from handler_table import find_handler
 logger = logging.getLogger(__name__)
 
@@ -84,15 +83,16 @@ def process_ready_socket(ready: socket.socket, server: socket.socket, inputs: Li
                 outputs.append(ready)
 
 
-def process_outgoing_socket(out_sock: socket.socket, outputs: List[socket.socket], connections: Dict[socket.socket, Buffer]):
+def process_outgoing_socket(out_sock: socket.socket, inputs: List[socket.socket], outputs: List[socket.socket], connections: Dict[socket.socket, Buffer]):
     buf = connections[out_sock]
     if buf.response:
         response = buf.response.build_response_str()
         out_sock.send(response.encode())
-        if buf.response.response_code != 200:
-            out_sock.close()
-    outputs.remove(out_sock)
 
+    out_sock.close()
+    outputs.remove(out_sock)
+    if out_sock in inputs:
+        inputs.remove(out_sock)
 
 
 def start_server(port: int) -> None:
@@ -113,7 +113,7 @@ def start_server(port: int) -> None:
         for s in readable_sock:
             process_ready_socket(s, server, inputs, outputs, connections)
         for s in writeable_sock:
-            process_outgoing_socket(s, outputs, connections)
+            process_outgoing_socket(s, inputs, outputs, connections)
         for s in err_sock:
             print(f"error in sock: {s}")
             inputs.remove(s)
